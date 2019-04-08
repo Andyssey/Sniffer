@@ -1,8 +1,8 @@
 CC=gcc
-CFLAGS=-Wall
+LDFLAGS= -lpcap
 
 snifer: main.c 
-	$(CC) $(CFLAGS) -o main  
+	$(CC) -w -o main main.c  $(LDFLAGS) 
 
 clean: 
 	rm main
