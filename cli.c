@@ -1,13 +1,15 @@
 #include <sys/stat.h>
 #include<pcap.h>
 #include<stdio.h>
-#include<stdlib.h> //exit()
-#include<string.h> //memset
+#include<stdlib.h>
+#include<string.h>
 #include <unistd.h>
 #include <signal.h>
 #include "main.h"
+#include <netinet/in.h>
 #define COMAND_BUFF 512
 #define DEFAULT_IFACE "wlan0"
+
 /*Define of CLI tokens*/
 #define START "start"
 #define STOP "stop"
@@ -16,43 +18,61 @@
 #define SELECT "select iface"
 #define STAT "stat"
 #define HELP "--help"
+
+
 int pid =-1;
-
-
+char *iface;
 char inBuffer[COMAND_BUFF];
-
 
 
 int main()
 {
     printf("Welcome to the command line of Pcapd Demon. Enter your commands or use --help to see help menun\n");
-    while(printf("> ") && fgets(inBuffer,COMAND_BUFF,stdin))
+    /*Main loop to get command*/
+    while(printf("$") && fgets(inBuffer,COMAND_BUFF,stdin))
     {
         if(strncmp(inBuffer,START,5) == 0)
         {
-            printf("We got start command\n");
-            start("wlan0");
+            if(iface == NULL)
+            {
+                start(DEFAULT_IFACE);    
+            }
+            else
+            {
+                start(iface);
+            }
         }
         else if (strncmp(inBuffer,STOP,4) == 0)
         {
-            printf("We got stop command\n");
             stop();
         }
         else if ((strncmp(inBuffer,SHOW,4) && strncmp(inBuffer,COUNT,5)) == 0)
         {
-            printf("We got show count command\n");
+            /*Not fully implmented*/
+            char *ipAddr = NULL;
+            int domain = AF_INET;
+            unsigned char buf[sizeof(struct in_addr)];
+            ipAddr = strtok(inBuffer," ");
+            ipAddr = strtok(NULL," ");
+            inet_pton(domain,ipAddr , buf);
+            printf("aaaaa %u\n", buf);
+            printf("Iface is %s", iface);
+           // get_if_statistic(iface,buf);
         }
         else if (strncmp(inBuffer,SELECT,12) == 0)
         {
-            printf("We got select command\n");
+            char *temp;
+            temp = strtok(inBuffer," ");
+            temp = strtok(NULL," ");
+            temp = strtok(NULL," ");
+            iface = malloc(strlen(temp) + 1);
+            strcpy(iface,temp);
         }
         else if (strncmp(inBuffer,STAT,4) == 0)
         {
             char *interface = NULL;
             interface = strtok(inBuffer," ");
-            printf("First token is %s\n", interface);
             interface = strtok(NULL," ");
-            printf("Second token is %s\n", interface);
             stat_iface(interface);
         }
         else if (strncmp(inBuffer,HELP,6) == 0)
@@ -87,13 +107,14 @@ void start(char *iface)
         freopen("/dev/null", "a", stdout);
         freopen("/dev/null", "a", stderr);
         freopen("/dev/null", "r", stdin);
-        char * argv_list[] = {"./main","wlan0",NULL}; 
+        char * argv_list[] = {"./main",iface,NULL}; 
         execv("./main",argv_list);
         printf("I am here\n");
         printf ("CPID is %d", pid); 
     }
     else
     {
+        /*Nothing to do in parent*/
         return 0;
     }
 }
@@ -112,7 +133,20 @@ void stat_iface(char *interface)
 {
     if (interface == NULL)
     {
-        printf("No interface specified...");
+        pcap_if_t *allDevices, *device;
+        char errbuff[512];
+        printf("Here is the list of all devices\n");
+        if (pcap_findalldevs(&allDevices, errbuff))
+        {
+            printf("Error while finding devices: %s\n", errbuff);
+        }
+        for(device = allDevices ; device != NULL ; device = device->next)
+        {
+            if (device->name != NULL)
+            {
+                get_if_statistic(device->name);
+            }
+        }
     }
     else
     {
@@ -122,29 +156,56 @@ void stat_iface(char *interface)
         }
         else
         {
-            kill(pid, SIGUSR1);
-            usleep(1000000); 
-            char *log = NULL;
-            log = malloc(strlen(interface) + 1);
-            strcpy(log, interface);
-            printf("Iface is %s and logfile is %s\n" , interface,log);
-            FILE *file;
-            file = fopen(log,"rb");
-            if (file == NULL)
-            {
-                printf("Wrong interface name, or statistic is missing\n");
-            }
-            else
-            {
-                st = (struct context*)malloc(sizeof(struct context));
-                context_initialize_from_file();
-                for(int i = 0; i < st->size; i++)
-                {
-                    printf("Source IP Addres is: %s  and the amount is: %d\n",inet_ntoa(st->packet[i].inIpaddr),st->packet[i].count);
-                }
-
-            }
-
+            get_if_statistic(interface);
         }
+        }
+}
+void get_if_statistic(char *iface_name, unsigned int ip)
+{
+    kill(pid, SIGUSR1);
+    usleep(1000000); 
+    char *filename = malloc(strlen(iface_name));
+    strncpy(filename, iface_name,strlen(iface_name) -1);
+    FILE *file;
+    file = fopen(filename,"rb");
+    if (file == NULL)
+    {
+        printf("No statistic for this interface\n");
+        return ;
     }
+    else
+    {
+        st = (struct context*)malloc(sizeof(struct context));
+        fread(&st->size, sizeof(int), 1, file);
+        fread(&st->capacity, sizeof(int), 1, file);
+        st->packet = calloc(sizeof(struct iface_packet),st->capacity);
+        int is = 0;
+        is = fread(st->packet, sizeof(struct iface_packet), st->size, file);
+        /*For show ip count command*/
+        if (ip == 0)
+        {
+            for(int i = 0; i < st->size; i++)
+            {
+                print_ip(st->packet[i].inIpaddr,i);
+            
+            }
+        }
+        else
+        {
+            int index = -1;
+            index = bin_search(ip);
+            print_ip(ip, index);
+        }
+        free(filename);
+        fclose(file);
+    }
+}
+void print_ip(int ip, int i)
+{
+    unsigned char bytes[4];
+    bytes[0] = ip & 0xFF;
+    bytes[1] = (ip >> 8) & 0xFF;
+    bytes[2] = (ip >> 16) & 0xFF;
+    bytes[3] = (ip >> 24) & 0xFF;   
+    printf(" Source ip addr is: %d.%d.%d.%d   Count of packets is: %d\n", bytes[3], bytes[2], bytes[1], bytes[0], st->packet[i].count);        
 }
