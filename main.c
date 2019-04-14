@@ -52,8 +52,9 @@ void print_ip_header(const u_char * Buffer, int Size)
     printf("   |-Source IP in unsigned long:        : %lu\n" ,source.sin_addr);
     printf("Pre next packet\n");
     #endif
-   // next_packet(source.sin_addr.s_addr);
+    next_packet(source.sin_addr.s_addr);
     printf("Post next packet\n");
+    signal(SIGUSR1, sigterm_h);
     signal(SIGTERM, sigterm_h);
 } 
 void print_packet(const u_char *Buffer , int Size)
@@ -135,20 +136,37 @@ int main(int argc, char** argv)
     return 0;
 }
 
-void sigterm_h(int signum, int abc)
+void sigterm_h(int signum)
 {
-    printf("Terminating...\n");
-    pcap_breakloop(handle);
-    printf("Try to save in %s\n",log);
-    logptr = fopen(log, "wb");
-    if (logptr == NULL)
+    
+    if (signum == SIGTERM)
     {
-        printf("Cannot open the file\n");
-        exit (1);
+        printf("Terminating...\n");
+        pcap_breakloop(handle);
+        printf("Try to save in %s\n",log);
+        logptr = fopen(log, "wb");
+        if (logptr == NULL)
+        {
+            printf("Cannot open the file\n");
+            exit (1);
+        }
+        fwrite(&st->size, sizeof(int), 1, logptr);
+        fwrite(&st->capacity, sizeof(int), 1, logptr);
+        fwrite(&st->packet, sizeof(struct iface_packet), st->size, logptr);
+        fclose(logptr);
+        printf("Finished writing\n");
+    } else if (signum == SIGUSR1)
+    {
+        printf("Terminating...1111\n");
+        logptr = fopen(log, "wb");
+        if (logptr == NULL)
+        {
+            printf("Cannot open the file\n");
+            exit (1);
+        }
+        fwrite(&st->size, sizeof(int), 1, logptr);
+        fwrite(&st->capacity, sizeof(int), 1, logptr);
+        fwrite(&st->packet, sizeof(struct iface_packet), st->size, logptr);
+        fclose(logptr);
     }
-    fwrite(&st->size, sizeof(int), 1, logptr);
-    fwrite(&st->capacity, sizeof(int), 1, logptr);
-    fwrite(&st->packet, sizeof(struct context), st->size, logptr);
-    fclose(logptr);
-    printf("Finished writing\n");
 }

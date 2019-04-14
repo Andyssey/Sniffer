@@ -21,10 +21,14 @@ void context_initialize_from_file()
 {
     fread(&st->size, sizeof(int), 1, logptr);
     fread(&st->capacity, sizeof(int), 1, logptr);
-    // st->size = sz;
-    // st->capacity = cap;
     st->packet = calloc(sizeof(struct iface_packet),st->capacity);
-    fread(&st->packet, sizeof(struct context), st->size, logptr);
+    int is = 0;
+    is = fread(st->packet, sizeof(struct iface_packet), st->size, logptr);
+    /*
+    printf("Is is %d",is);
+    printf("SIZE IS %d   CAP iS %d\n",st->size,st->capacity);
+    printf("IP is %lu\n",st->packet[0].inIpaddr);
+    */
 }
 void insert_new(unsigned long ip)
 {
@@ -89,18 +93,25 @@ void insert_new(unsigned long ip)
 
 int bin_search(unsigned long ip)
 {
-    unsigned long start = 0; 
-    unsigned long end = st->size;
-    unsigned long mid = (start + end)/2;
+    unsigned long long start = 0; 
+    unsigned long long end = st->size;
+    unsigned long long mid = (start + end)/2;
+    printf("before\n");
+    printf("Start not is %lu  mid now is %lu  end now is %lu\n", start, mid, end);
     while (start < end)
-    {
+    {   printf("Here I am\n");
         if (st->packet[mid].inIpaddr < ip){
+            printf("123\n");
             start = mid + 1;
+            printf("Start not is %lu  mid now is %lu  end now is %lu\n", start, mid, end);
         } else if (st->packet[mid].inIpaddr > ip){
             end = mid;
+            printf("Start not is %lu  mid now is %lu  end now is %lu\n", start, mid, end);
         } else {
+            printf("Start not is %lu  mid now is %lu  end now is %lu\n", start, mid, end);
             return mid;
         }
+        printf("Start not is %lu  mid now is %lu  end now is %lu\n", start, mid, end);
         mid = (start + end)/2;
     }
 return -1;
