@@ -1,8 +1,9 @@
 CC=gcc
+CFLAGS= -std=gnu99
 LDFLAGS= -lpcap
 
 snifer: main.c 
-	$(CC) -w -o main main.c  $(LDFLAGS) 
+	$(CC) $(CFLAGS) -w -o main main.c  $(LDFLAGS) 
 
 clean: 
 	rm main
