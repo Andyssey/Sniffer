@@ -17,6 +17,7 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <signal.h>
+#include <fcntl.h>
 #define ERR_SIZE 512
 
 pcap_t *handle;
@@ -111,6 +112,13 @@ int sniff(char * iface)
     {
         st = (struct context*)malloc(sizeof(struct context));
         context_initialize_from_file();
+        #ifdef DEBUG
+        for(int i = 0; i < st->size; i++)
+        {
+            print_ip(st->packet[i].inIpaddr,i);
+        
+        }
+        #endif
         pcap_loop(handle, -1,process_packet, NULL);
     }
     free(log);
@@ -156,16 +164,32 @@ void sigterm_h(int signum)
     } 
     else if (signum == SIGUSR1)
     {
-        pcap_breakloop(handle);
+       // pcap_breakloop(handle);
         logptr = fopen(log, "wb");
         if (logptr == NULL)
         {
             printf("Cannot open the file\n");
             exit (1);
         }
-        fwrite(&st->size, sizeof(int), 1, logptr);
-        fwrite(&st->capacity, sizeof(int), 1, logptr);
-        fwrite(st->packet, sizeof(struct iface_packet), st->size, logptr);
-        fclose(logptr);
+        /*Get interface name via named pipe*/
+        int fd;
+        char *iface = malloc(sizeof(char)*12);
+        mkfifo(PIPEFILE,0666);
+        fd = open(PIPEFILE,O_RDONLY);
+        read(fd,iface,sizeof iface);
+        //#ifdef DEBUG
+        printf("Information about %s interface requested\n", iface);
+        //#endif
+        close(fd);
+        /*Send back the results about request*/
+        int nd;
+        int test2=10000000;
+        nd = open(PIPEFILE,O_WRONLY);
+        write(nd, &test2, sizeof(int));
+        //fwrite(test2, sizeof(int), 1, fd);
+        // printf("out     !!!\n");
+        //fwrite(&st->capacity, sizeof(int), 1, fd);
+        //fwrite(st->packet, sizeof(struct iface_packet), st->size, fd);
+        fclose(fd);
     }
 }

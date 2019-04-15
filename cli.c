@@ -7,6 +7,7 @@
 #include <signal.h>
 #include "main.h"
 #include <netinet/in.h>
+#include <fcntl.h>
 #define COMAND_BUFF 512
 #define DEFAULT_IFACE "wlan0"
 
@@ -55,9 +56,8 @@ int main()
             ipAddr = strtok(inBuffer," ");
             ipAddr = strtok(NULL," ");
             inet_pton(domain,ipAddr , buf);
-            printf("aaaaa %u\n", buf);
             printf("Iface is %s", iface);
-           // get_if_statistic(iface,buf);
+            get_if_statistic(iface,buf);
         }
         else if (strncmp(inBuffer,SELECT,12) == 0)
         {
@@ -104,9 +104,13 @@ void start(char *iface)
     }
     if(pid == 0)
     {
-        freopen("/dev/null", "a", stdout);
-        freopen("/dev/null", "a", stderr);
-        freopen("/dev/null", "r", stdin);
+       // freopen("/dev/null", "a", stdout);
+       // freopen("/dev/null", "a", stderr);
+       // freopen("/dev/null", "r", stdin);
+        if (iface == NULL)
+        {
+            char * argv_list[] = {"./main","wlan0",NULL};    
+        }
         char * argv_list[] = {"./main",iface,NULL}; 
         execv("./main",argv_list);
         printf("I am here\n");
@@ -156,13 +160,39 @@ void stat_iface(char *interface)
         }
         else
         {
-            get_if_statistic(interface);
+            get_if_statistic(interface,0);
         }
-        }
+    }
 }
+
+
+
+
 void get_if_statistic(char *iface_name, unsigned int ip)
 {
+    /*Send a signal and interface name via named pipe*/
     kill(pid, SIGUSR1);
+    int fd = open(PIPEFILE,O_WRONLY);
+    write(fd,iface_name,strlen(iface_name)+1);
+    close(fd);
+    /*Get the results from sniffer*/
+    fd = open(PIPEFILE,O_RDONLY);
+    st = (struct context*)malloc(sizeof(struct context));
+    int test = 0;
+    read(fd, &test, sizeof(int));
+    //fread(&st->size, sizeof(int), 1, fd);
+    printf("Thssssse size isssssss %d\n", test);
+    // fread(&st->capacity, sizeof(int), 1, fd);
+    //st->packet = calloc(sizeof(struct iface_packet),st->capacity);
+    //int is = 0;
+    //is = fread(st->packet, sizeof(struct iface_packet), st->size, fd);
+    //for(int i = 0; i < st->size; i++)
+    //{
+    //    print_ip(st->packet[i].inIpaddr,i);
+    
+   // }
+
+    /*
     usleep(1000000); 
     char *filename = malloc(strlen(iface_name));
     strncpy(filename, iface_name,strlen(iface_name) -1);
@@ -182,6 +212,7 @@ void get_if_statistic(char *iface_name, unsigned int ip)
         int is = 0;
         is = fread(st->packet, sizeof(struct iface_packet), st->size, file);
         /*For show ip count command*/
+        /*
         if (ip == 0)
         {
             for(int i = 0; i < st->size; i++)
@@ -199,13 +230,5 @@ void get_if_statistic(char *iface_name, unsigned int ip)
         free(filename);
         fclose(file);
     }
-}
-void print_ip(int ip, int i)
-{
-    unsigned char bytes[4];
-    bytes[0] = ip & 0xFF;
-    bytes[1] = (ip >> 8) & 0xFF;
-    bytes[2] = (ip >> 16) & 0xFF;
-    bytes[3] = (ip >> 24) & 0xFF;   
-    printf(" Source ip addr is: %d.%d.%d.%d   Count of packets is: %d\n", bytes[3], bytes[2], bytes[1], bytes[0], st->packet[i].count);        
+*/
 }

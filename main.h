@@ -1,4 +1,5 @@
-// #define DEBUG 1
+// fine DEBUG 1
+#define PIPEFILE "/tmp/sniffer"
 FILE *logptr = NULL;
 struct iface_packet {
     unsigned long inIpaddr;
@@ -19,7 +20,6 @@ void context_initialize()
 }
 void context_initialize_from_file()
 {
-    // printf("11111");
     fread(&st->size, sizeof(int), 1, logptr);
     fread(&st->capacity, sizeof(int), 1, logptr);
     st->packet = calloc(sizeof(struct iface_packet),st->capacity);
@@ -72,7 +72,7 @@ int bin_search(unsigned long ip)
             start = mid+1;
         } else if (st->packet[mid].inIpaddr > ip)
         {   
-            end = mid -1;
+            end = mid;
         }
         mid = (start + end)/2;
     }
@@ -90,4 +90,13 @@ void next_packet(unsigned long ip)
         insert_new(ip);
     }
 
+}
+void print_ip(int ip, int i)
+{
+    unsigned char bytes[4];
+    bytes[0] = ip & 0xFF;
+    bytes[1] = (ip >> 8) & 0xFF;
+    bytes[2] = (ip >> 16) & 0xFF;
+    bytes[3] = (ip >> 24) & 0xFF;   
+    printf(" Source ip addr is: %d.%d.%d.%d   Count of packets is: %d\n", bytes[3], bytes[2], bytes[1], bytes[0], st->packet[i].count);        
 }
