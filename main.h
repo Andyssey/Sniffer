@@ -1,5 +1,8 @@
-// fine DEBUG 1
+#define DEBUG 1
 #define PIPEFILE "/tmp/sniffer"
+#define PIPEFILE_2 "/tmp/sniffer_2"
+#define PIDFILE "/tmp/snifer_pid"
+#define IFACE_SIZE 16
 FILE *logptr = NULL;
 struct iface_packet {
     unsigned long inIpaddr;

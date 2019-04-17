@@ -46,14 +46,15 @@ void print_ip_header(const u_char * Buffer, int Size)
     dest.sin_addr.s_addr = iph->daddr;
     #ifdef DEBUG
 	printf("\n");
-	printf("   IP Address\n");
-	printf("   |-IP Version       : %d\n",(unsigned int)iph->version);
-    printf("   |-Source IP        : %s\n" , inet_ntoa(source.sin_addr) );
-    printf("   |-Destination IP   : %s\n" , inet_ntoa(dest.sin_addr) );
-    printf("   |-Source IP in unsigned long:        : %lu\n" ,source.sin_addr);
+	//printf("   IP Address\n");
+	//printf("   |-IP Version       : %d\n",(unsigned int)iph->version);
+    //printf("   |-Source IP        : %s\n" , inet_ntoa(source.sin_addr) );
+    //printf("   |-Destination IP   : %s\n" , inet_ntoa(dest.sin_addr) );
+    //printf("   |-Source IP in unsigned long:        : %lu\n" ,source.sin_addr);
     #endif
     next_packet(source.sin_addr.s_addr);
     signal(SIGUSR1, sigterm_h);
+    signal(SIGUSR2, sigterm_h);
     signal(SIGTERM, sigterm_h);
 } 
 void print_packet(const u_char *Buffer , int Size)
@@ -97,7 +98,11 @@ int sniff(char * iface)
         fprintf(stderr, "Couldn't open device %s : %s\n" , devname , errbuff);
         exit(1);
     }
-    
+    /*Get the process id and save it to file, so that CLI could sent signals*/
+    int sniffer_pid = getpid();
+    int id_file = open(PIDFILE, O_WRONLY | O_APPEND | O_CREAT, 0644);
+    int ret_val = write(id_file,&sniffer_pid, sizeof(int));
+    close(id_file);
     /* Check if the data from previous launch is avaliable in file */
     log = malloc(strlen(iface) + 1);
     strcpy(log, iface);
@@ -119,7 +124,6 @@ int sniff(char * iface)
         
         }
         #endif
-        pcap_loop(handle, -1,process_packet, NULL);
     }
     free(log);
 }
@@ -151,6 +155,7 @@ void sigterm_h(int signum)
     if (signum == SIGTERM)
     {
         pcap_breakloop(handle);
+        unlink(PIDFILE);
         logptr = fopen(log, "wb");
         if (logptr == NULL)
         {
@@ -164,7 +169,6 @@ void sigterm_h(int signum)
     } 
     else if (signum == SIGUSR1)
     {
-       // pcap_breakloop(handle);
         logptr = fopen(log, "wb");
         if (logptr == NULL)
         {
@@ -173,23 +177,35 @@ void sigterm_h(int signum)
         }
         /*Get interface name via named pipe*/
         int fd;
-        char *iface = malloc(sizeof(char)*12);
+        char *iface = malloc(sizeof(char)* IFACE_SIZE);
         mkfifo(PIPEFILE,0666);
         fd = open(PIPEFILE,O_RDONLY);
         read(fd,iface,sizeof iface);
-        //#ifdef DEBUG
-        printf("Information about %s interface requested\n", iface);
-        //#endif
         close(fd);
         /*Send back the results about request*/
         int nd;
-        int test2=10000000;
         nd = open(PIPEFILE,O_WRONLY);
-        write(nd, &test2, sizeof(int));
-        //fwrite(test2, sizeof(int), 1, fd);
-        // printf("out     !!!\n");
-        //fwrite(&st->capacity, sizeof(int), 1, fd);
-        //fwrite(st->packet, sizeof(struct iface_packet), st->size, fd);
-        fclose(fd);
+        write(nd, &st->size, sizeof(int));
+        for (int i = 0; i < st->size; i++)
+        {
+            write(nd, &st->packet[i].inIpaddr, sizeof(int));
+            write(nd, &st->packet[i].count, sizeof(int));   
+        }
+        close(nd);
+        unlink(PIPEFILE);
+        free(iface);
+    }else if (signum == SIGUSR2)
+    {
+        unsigned long ip = 0;
+        mkfifo(PIPEFILE_2,0666);
+        int fd = open(PIPEFILE_2,O_RDONLY);
+        read(fd,&ip,sizeof(unsigned long));
+        int index = bin_search(ip);
+        int count = st->packet[index].count;
+        fd = open(PIPEFILE_2,O_WRONLY);
+        usleep(200000);
+        write(fd, &count, sizeof(int));
+        close(fd);
+        unlink(PIPEFILE_2);
     }
 }

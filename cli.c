@@ -8,6 +8,7 @@
 #include "main.h"
 #include <netinet/in.h>
 #include <fcntl.h>
+#include <errno.h>
 #define COMAND_BUFF 512
 #define DEFAULT_IFACE "wlan0"
 
@@ -52,12 +53,12 @@ int main()
             /*Not fully implmented*/
             char *ipAddr = NULL;
             int domain = AF_INET;
-            unsigned char buf[sizeof(struct in_addr)];
             ipAddr = strtok(inBuffer," ");
             ipAddr = strtok(NULL," ");
-            inet_pton(domain,ipAddr , buf);
-            printf("Iface is %s", iface);
-            get_if_statistic(iface,buf);
+            struct sockaddr_in ip4addr;
+            inet_pton(domain,ipAddr , &ip4addr.sin_addr);
+            unsigned long ip = ip4addr.sin_addr.s_addr;
+            show(ip);
         }
         else if (strncmp(inBuffer,SELECT,12) == 0)
         {
@@ -96,6 +97,17 @@ int main()
 
 void start(char *iface)
 {
+    /*Get the daemon process id*/
+    if (pid == -1)
+    {
+        int id_file = open(PIDFILE, O_RDONLY, 0644);
+        if (id_file != -1)
+        {
+            read(id_file,&pid, sizeof(int));
+            kill(pid,SIGCONT); 
+            return;   
+        }    
+    } 
     pid = fork();
     if (pid == -1)
     {
@@ -109,7 +121,8 @@ void start(char *iface)
        // freopen("/dev/null", "r", stdin);
         if (iface == NULL)
         {
-            char * argv_list[] = {"./main","wlan0",NULL};    
+            char * argv_list[] = {"./main","wlan0",NULL};
+            iface = "wlan0"; 
         }
         char * argv_list[] = {"./main",iface,NULL}; 
         execv("./main",argv_list);
@@ -121,6 +134,7 @@ void start(char *iface)
         /*Nothing to do in parent*/
         return 0;
     }
+
 }
 void stop()
 {
@@ -130,7 +144,8 @@ void stop()
     }
     else
     {
-        kill(pid, SIGTERM);
+        pid = -1;
+        kill(pid, SIGSTOP);
     }
 }
 void stat_iface(char *interface)
@@ -154,81 +169,59 @@ void stat_iface(char *interface)
     }
     else
     {
-        if(pid == -1)
-        {
-            printf("Seems like Sniffer is not started from cli.\nUse start command of check --help menu\n");
-        }
-        else
-        {
-            get_if_statistic(interface,0);
-        }
+        get_if_statistic(interface,0);
     }
 }
 
-
-
-
-void get_if_statistic(char *iface_name, unsigned int ip)
+void get_if_statistic(char *iface_name)
 {
     /*Send a signal and interface name via named pipe*/
     kill(pid, SIGUSR1);
+    /*Give some time*/
+    usleep(200000);
     int fd = open(PIPEFILE,O_WRONLY);
     write(fd,iface_name,strlen(iface_name)+1);
     close(fd);
     /*Get the results from sniffer*/
     fd = open(PIPEFILE,O_RDONLY);
-    st = (struct context*)malloc(sizeof(struct context));
-    int test = 0;
-    read(fd, &test, sizeof(int));
-    //fread(&st->size, sizeof(int), 1, fd);
-    printf("Thssssse size isssssss %d\n", test);
-    // fread(&st->capacity, sizeof(int), 1, fd);
-    //st->packet = calloc(sizeof(struct iface_packet),st->capacity);
-    //int is = 0;
-    //is = fread(st->packet, sizeof(struct iface_packet), st->size, fd);
-    //for(int i = 0; i < st->size; i++)
-    //{
-    //    print_ip(st->packet[i].inIpaddr,i);
-    
-   // }
-
-    /*
-    usleep(1000000); 
-    char *filename = malloc(strlen(iface_name));
-    strncpy(filename, iface_name,strlen(iface_name) -1);
-    FILE *file;
-    file = fopen(filename,"rb");
-    if (file == NULL)
+    int size = 0;
+    read(fd, &size, sizeof(int));
+    printf ("Get the size of %d\n", size);
+    for (int i = 0; i < size; i++)
     {
-        printf("No statistic for this interface\n");
-        return ;
+        unsigned long ip = 0;
+        unsigned long count = 0;
+        read(fd, &ip, sizeof(int));
+        read(fd, &count, sizeof(int));
+        int net_ip = htonl(ip);
+        show_ip(net_ip,count);
     }
-    else
-    {
-        st = (struct context*)malloc(sizeof(struct context));
-        fread(&st->size, sizeof(int), 1, file);
-        fread(&st->capacity, sizeof(int), 1, file);
-        st->packet = calloc(sizeof(struct iface_packet),st->capacity);
-        int is = 0;
-        is = fread(st->packet, sizeof(struct iface_packet), st->size, file);
-        /*For show ip count command*/
-        /*
-        if (ip == 0)
-        {
-            for(int i = 0; i < st->size; i++)
-            {
-                print_ip(st->packet[i].inIpaddr,i);
-            
-            }
-        }
-        else
-        {
-            int index = -1;
-            index = bin_search(ip);
-            print_ip(ip, index);
-        }
-        free(filename);
-        fclose(file);
-    }
-*/
+    close(fd);
+    unlink(PIPEFILE);
+}
+void show(unsigned long ip)
+{
+    int count = 0;
+    kill(pid,SIGUSR2);
+    /*Give some time*/
+    usleep(200000);
+    int fd = open(PIPEFILE_2,O_WRONLY);
+    write(fd,&ip,sizeof(unsigned long));
+    usleep(200000);
+    fd = open(PIPEFILE_2,O_RDONLY);
+    printf("The amout of bytes is %d\n",fd);
+    read(fd, &count, sizeof(int));
+    printf("The count on CLI is %lu\n", count);
+    int net_ip = htonl(ip);
+    show_ip(net_ip,count);
+    close(fd);
+}
+void show_ip(int ip, int i)
+{
+    unsigned char bytes[4];
+    bytes[0] = ip & 0xFF;
+    bytes[1] = (ip >> 8) & 0xFF;
+    bytes[2] = (ip >> 16) & 0xFF;
+    bytes[3] = (ip >> 24) & 0xFF;   
+    printf(" Source ip addr is: %d.%d.%d.%d   Count of packets is: %d\n", bytes[3], bytes[2], bytes[1], bytes[0], i);        
 }
